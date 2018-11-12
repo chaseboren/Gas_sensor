@@ -14,7 +14,7 @@ try:
 except:
     import urllib2 as request
 
-GPIO.setmode(GPIO.board)
+GPIO.setmode(GPIO.BCM)
 GPIO.setup(19, GPIO.IN)
 GPIO.setup(26, GPIO.OUT)
 GPIO.output(26, True)
@@ -79,11 +79,7 @@ def main():
             print('An error occured')
 
     def on_publish(client, userdata, mid):
-        payloadString = sensorStatus()
-        publish.single(write_topic,
-                       payload=payloadString,
-                       hostname=mqtt_broker_host,
-                       port=mqtt_broker_port)
+        print('published')
 
     client = mqtt.Client()
     connect(client, mqtt_broker_host, mqtt_broker_port)
@@ -91,7 +87,16 @@ def main():
     client.on_message = on_message
     client.on_disconnect = on_disconnect
     client.on_publish = on_publish
-    client.loop_forever()
+    client.loop_start()
+    while True:
+        payloadString = sensorStatus()
+        publish.single(write_topic,
+                       payload=payloadString,
+                       hostname=mqtt_broker_host,
+                       port=mqtt_broker_port)
+        print(payloadString)
+        time.sleep(5)
+        pass
 
 # Connects the client. If fails due to host being down or localhost network is down, retry
 
@@ -120,4 +125,12 @@ def sensorStatus():
         return "No gas present"
 
 
-main()
+if __name__ == '__main__':
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    finally:
+
+        GPIO.cleanup()
