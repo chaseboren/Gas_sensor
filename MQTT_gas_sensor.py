@@ -25,7 +25,7 @@ HOSTNAME = socket.gethostname()
 COMMAND = "gas_sensor"
 TIME_TO_INACTIVE = 120.0  # sec
 DELTA_TIME_PLAYING_STATUS = 0.1
-DEFAULT_ROOT_TOPIC = "/gas_sensor/" + HOSTNAME
+DEFAULT_ROOT_TOPIC = "/gas_sensor/state/" + HOSTNAME
 
 parser = argparse.ArgumentParser(
     description='MQTT service for monitoring a gas sensor')
@@ -82,6 +82,7 @@ def main():
         print('published')
 
     client = mqtt.Client()
+    client.will_set("/gas_sensor/availability/raspberrypi", payload="offline", retain = True)
     connect(client, mqtt_broker_host, mqtt_broker_port)
     client.on_connect = on_connect
     client.on_message = on_message
@@ -89,11 +90,11 @@ def main():
     client.on_publish = on_publish
     client.loop_start()
     while True:
+        sensorReset()
         payloadString = sensorStatus()
-        publish.single(write_topic,
-                       payload=payloadString,
-                       hostname=mqtt_broker_host,
-                       port=mqtt_broker_port)
+        client.publish("/gas_sensor/availability/raspberrypi", payload="online")
+        client.publish(write_topic,
+                       payload=payloadString)
         print(payloadString)
         time.sleep(5)
         pass
@@ -114,15 +115,15 @@ def connect(client, host, port):
 
 def sensorReset():
     GPIO.output(26, False)
-    time.sleep(1)
+    time.sleep(.5)
     GPIO.output(26, True)
 
 
 def sensorStatus():
-    if (GPIO.input(19, True)):
-        return "Gas present"
+    if (GPIO.input(19)==True):
+        return "ON"
     else:
-        return "No gas present"
+        return "OFF"
 
 
 if __name__ == '__main__':
@@ -132,5 +133,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
-
+        client.publish("/gas_sensor/availability/raspberrypi", payload = "offline", retain = True)
         GPIO.cleanup()
