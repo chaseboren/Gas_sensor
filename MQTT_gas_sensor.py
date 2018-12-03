@@ -13,12 +13,14 @@ try:
     import urllib.request as request
 except:
     import urllib2 as request
-
+"""Setup the Pi. pin 19 is the connected upstream of R2 in design. Pin 26 is the base of Q1. The detector
+ circuit is enabled with pin 26 set high."""
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(19, GPIO.IN)
 GPIO.setup(26, GPIO.OUT)
 GPIO.output(26, True)
 
+"""Setups the MQTT service. """
 DEFAULT_MQTT_BROKER_HOST = "192.168.86.101"
 DEFAULT_MQTT_BROKER_PORT = 1883
 HOSTNAME = socket.gethostname()
@@ -27,6 +29,7 @@ TIME_TO_INACTIVE = 120.0  # sec
 DELTA_TIME_PLAYING_STATUS = 0.1
 DEFAULT_ROOT_TOPIC = "/gas_sensor/state/" + HOSTNAME
 
+"""This sets up using the script as a command line utility with switches. Not strictly necessary. """
 parser = argparse.ArgumentParser(
     description='MQTT service for monitoring a gas sensor')
 parser.add_argument('--host', '-H', type=str, nargs=1, default=DEFAULT_MQTT_BROKER_HOST,
@@ -54,7 +57,7 @@ def main():
                        hostname=mqtt_broker_host,
                        port=mqtt_broker_port)
         exit(0)
-
+    """These functions are used with the command line functions"""
     def on_connect(client, userdata, flags, rc):
         print("Connected with result code " + str(rc))
         print("MQTT Topic: {}, Connected to {}".format(
@@ -82,17 +85,21 @@ def main():
         print('published')
 
     client = mqtt.Client()
-    client.will_set("/gas_sensor/availability/raspberrypi", payload="offline", retain = True)
+    """Tells the server what to do when disconnect occurs"""
+    client.will_set("/gas_sensor/availability/raspberrypi",
+                    payload="offline", retain=True)
     connect(client, mqtt_broker_host, mqtt_broker_port)
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_disconnect = on_disconnect
     client.on_publish = on_publish
     client.loop_start()
+    """this is the loop that always runs. Still contains some trouble shooting stuff"""
     while True:
         sensorReset()
         payloadString = sensorStatus()
-        client.publish("/gas_sensor/availability/raspberrypi", payload="online")
+        client.publish("/gas_sensor/availability/raspberrypi",
+                       payload="online")
         client.publish(write_topic,
                        payload=payloadString)
         print(payloadString)
@@ -114,24 +121,27 @@ def connect(client, host, port):
 
 
 def sensorReset():
+    """Resets D2."""
     GPIO.output(26, False)
     time.sleep(.5)
     GPIO.output(26, True)
 
 
 def sensorStatus():
-    if (GPIO.input(19)==True):
+    """Reads the input from the detection circuit."""
+    if (GPIO.input(19) == True):
         return "ON"
     else:
         return "OFF"
 
 
 if __name__ == '__main__':
-
-    try:
+"""The try-except is to facilitate command line testing and exiting with ^C.  The
+finally statement sends a death message to the MQTT server and releases the GPIO pins. """
+   try:
         main()
     except KeyboardInterrupt:
         pass
     finally:
-        client.publish("/gas_sensor/availability/raspberrypi", payload = "offline", retain = True)
+        client.publish("/gas_sensor/availability/raspberrypi", payload= "offline", retain = True)
         GPIO.cleanup()
